@@ -43,31 +43,45 @@ const safetySettings = [
 // Crear una instancia de GoogleGenerativeAI con la clave de API proporcionada
 const genAI = new GoogleGenerativeAI(process.env.API_KEY);
 
+let respuestas; // Variable para almacenar las respuestas
+let firstCall = true; // Variable para saber si es la primera llamada
+
 // Función para generar un objeto de mensaje del modelo
 function createModelMessage(text) {
-  return {
-    role: "model",
-    parts: [{ text }],
-  };
+  if (firstCall) {
+    firstCall = false;
+    return {
+      role: "model",
+      parts: [{ text }, { text: respuestas }],
+    };
+  } else {
+    return {
+      role: "model",
+      parts: [{ text }],
+    };
+  }
 }
 
 // Función para obtener las respuestas de la base de datos
 async function fetchDatabaseResponses() {
   try {
     const lenguajes = await databases.LeerInfo();
-    return JSON.stringify(lenguajes);
+    return respuestas = JSON.stringify(lenguajes);
   } catch (error) {
     console.error("Error al recuperar las respuestas de la base de datos:", error);
     throw error;
   }
 }
 
+fetchDatabaseResponses();
+
 // Función para manejar la entrada del usuario y actualizar el historial
-async function handleUserInput(history, userInput, respuestas) {
+async function handleUserInput(history, userInput) {
   history.push(
+    
     {
       role: "user",
-      parts: [{ text: userInput, text: respuestas }, ],
+      parts: [{ text: userInput }],
     },
     
     createModelMessage("")
@@ -75,16 +89,13 @@ async function handleUserInput(history, userInput, respuestas) {
 }
 
 // Función para manejar la respuesta del modelo y actualizar el historial
-async function handleModelResponse(history, model, inputText, respuestas) {
-  // Agregar respuestas al historial antes de iniciar el chat
-//   history.push(createModelMessage(respuestas));
+async function handleModelResponse(history, model, inputText) {
 
   const chat = model.startChat({
     history: history,
     generationConfig: generationConfig,
     safetySettings: safetySettings,
   });
-  console.log();
 
   const result = await chat.sendMessage(inputText);
   const response = await result.response;
@@ -120,14 +131,6 @@ async function handleError(error) {
 
 // Función principal asincrónica que ejecuta la conversación
 async function run() {
-  let respuestas = null;
-
-  try {
-    respuestas = await fetchDatabaseResponses();
-  } catch (error) {
-    await handleError(error);
-    return;
-  }
   
   const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
   
@@ -143,8 +146,8 @@ async function run() {
         break;
       }
 
-      await handleUserInput(history, inputText, respuestas);
-      await handleModelResponse(history, model, inputText, respuestas);
+      await handleUserInput(history, inputText);
+      await handleModelResponse(history, model, inputText);
     } catch (error) {
       await handleError(error);
     }

@@ -1,4 +1,5 @@
-
+// Importa el módulo de base de datos
+const { databases } = require("./database");
 //Con esta parte del programa pueden ver las consultas en un localhost
 // Importa el módulo Express.js
 const express = require("express");
