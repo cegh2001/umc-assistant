@@ -1,50 +1,17 @@
 // Importa el módulo de base de datos
 const { databases } = require("./database");
 
-// Importar la clase GoogleGenerativeAI del paquete @google/generative-ai
-const {
-  GoogleGenerativeAI,
-  HarmCategory,
-  HarmBlockThreshold,
-} = require("@google/generative-ai");
+// Importa las funciones de integración con la IA
+const { genAI, generationConfig, safetySettings } = require("./aiIntegration");
 
-// Importar readline del módulo readline
-const readline = require("readline");
+// Importa la función de interacción con el usuario
+const { getUserInput } = require("./userInteraction");
 
-// Cargar las variables de entorno desde el archivo .env
-require("dotenv").config();
+// Variable para almacenar las respuestas
+let respuestas;
 
-const generationConfig = {
-  temperature: 0.9,
-  topK: 0,
-  topP: 1,
-  maxOutputTokens: 2048,
-};
-
-const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-];
-
-// Crear una instancia de GoogleGenerativeAI con la clave de API proporcionada
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-
-let respuestas; // Variable para almacenar las respuestas
-let firstCall = true; // Variable para saber si es la primera llamada
+ // Variable para saber si es la primera llamada
+let firstCall = true; 
 
 // Función para generar un objeto de mensaje del modelo
 function createModelMessage(text) {
@@ -56,10 +23,10 @@ function createModelMessage(text) {
         { text },
         { text: respuestas },
         {
-          text: "No inventes información, por favor. Si no sabes la respuesta, dilo.",
+          text: "No inventes información, por favor, como maximo puedes actualizar o aportar. Si no sabes la respuesta, dilo.",
         },
         {
-          text: "Da información de la umc solo si la tienes de antemano o si está pública en internet.",
+          text: "Da información de la umc si la tienes de antemano o si está pública en internet.",
         },
         {
           text: "Las url http://www.umc.edu.ve/images/2023calen.jpg y http://www.umc.edu.ve/images/Pasantias2023.pdf actualiza cambiando '2023' por el año que buscas.",
@@ -165,23 +132,6 @@ async function run() {
     }
   }
 }
-
-// Función asincrónica para obtener la entrada del usuario desde la consola
-const getUserInput = () => {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    // Solicitar la entrada del usuario con un mensaje "Tú: "
-    rl.question("Tú: ", (inputText) => {
-      // Resolver la promesa con la entrada del usuario y cerrar la interfaz readline
-      resolve(inputText);
-      rl.close();
-    });
-  });
-};
 
 // Ejecutar la función principal para iniciar la conversación
 run();
