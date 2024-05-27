@@ -23,10 +23,10 @@ function createModelMessage(text) {
         { text },
         { text: respuestas },
         {
-          text: "No inventes información, por favor, como maximo puedes actualizar o aportar. Si no sabes la respuesta, dilo.",
+          text: "No inventes información de la umc, por favor, como maximo puedes actualizar o aportar. Si no sabes la respuesta, dilo.",
         },
         {
-          text: "Da información de la umc si la tienes de antemano o si está pública en internet.",
+          text: "Da información de la umc si la tienes o si está pública en internet.",
         },
         {
           text: "Las url http://www.umc.edu.ve/images/2023calen.jpg y http://www.umc.edu.ve/images/Pasantias2023.pdf actualiza cambiando '2023' por el año que buscas.",

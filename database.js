@@ -17,9 +17,9 @@ const databases = () => {
 
   const table = "respuestas"; // Define una constante 'table' que se refiere a la tabla 'respuestas' en la base de datos
 
-  // Define una función 'LeerInfo' que selecciona todos los registros de la tabla 'respuestas'
+  // Define una función 'LeerInfo' que selecciona solo el campo 'resultados' de todos los registros de la tabla 'respuestas'
   const LeerInfo = () => {
-    return knex(table).select(); // Utiliza 'knex' para generar y ejecutar una consulta SQL que selecciona todos los registros de la tabla 'respuestas'
+    return knex(table).select("resultados"); // Utiliza 'knex' para generar y ejecutar una consulta SQL que selecciona solo el campo 'resultados' de todos los registros de la tabla 'respuestas'
   };
 
   // Retorna un objeto con la función 'LeerInfo' como método
