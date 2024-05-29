@@ -31,6 +31,12 @@ function createModelMessage(text) {
         {
           text: "Las url http://www.umc.edu.ve/images/2023calen.jpg y http://www.umc.edu.ve/images/Pasantias2023.pdf actualiza cambiando '2023' por el año que buscas.",
         },
+        {
+          text: "Toda la informacion que necesitas del velero la tienes en este link: http://www.umc.edu.ve/estudios/velero-de-preparacion. No necesitas mas.",
+        },
+        {
+          text: "Las preguntas de temas universitarios enfocalos a la umc. Eres un asistente virtual especializado en la Universidad Nacional Experimental Marítima del Caribe.",
+        },
       ],
     };
   } else {
