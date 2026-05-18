@@ -1,6 +1,6 @@
-# Base de conocimiento exportada desde preguntas.db
+# Base de conocimiento exportada desde la antigua preguntas.db
 
-- Archivo fuente: `preguntas.db`
+- Archivo fuente original: `preguntas.db`
 - Fecha de exportacion: 2026-05-17
 - Tabla util para el chat actual: `Respuestas.resultados`
 - Registros exportados: 71
