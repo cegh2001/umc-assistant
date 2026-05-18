@@ -113,14 +113,14 @@ async function createResponse(
   };
 
   if (!shouldRequestThinking(model)) {
-    return chat.sendMessage({
+    return sendMessageWithRetry(chat, {
       message,
       config: baseConfig,
     });
   }
 
   try {
-    return await chat.sendMessage({
+    return await sendMessageWithRetry(chat, {
       message,
       config: {
         ...baseConfig,
@@ -131,10 +131,31 @@ async function createResponse(
     });
   } catch (error) {
     if (shouldRetryWithoutThinking(model, error)) {
-      return chat.sendMessage({
+      return sendMessageWithRetry(chat, {
         message,
         config: baseConfig,
       });
+    }
+
+    throw error;
+  }
+}
+
+async function sendMessageWithRetry(
+  chat: Chat,
+  payload: {
+    message: PartListUnion;
+    config: {
+      tools: Array<{ googleSearch: {} }>;
+      thinkingConfig?: { thinkingLevel: ThinkingLevel.HIGH | ThinkingLevel.LOW };
+    };
+  }
+): Promise<GenerateContentResponse> {
+  try {
+    return await chat.sendMessage(payload);
+  } catch (error) {
+    if (getErrorStatus(error) === 500) {
+      return chat.sendMessage(payload);
     }
 
     throw error;
@@ -370,7 +391,14 @@ async function extractSources(
     collectGroundingMetadataSources(candidate, sources);
   }
 
-  return verifySources(Array.from(sources.values()).slice(0, 6));
+  const collectedSources = Array.from(sources.values());
+  const preferredSources = collectedSources.some(
+    (source) => !isVertexSearchUrl(source.url)
+  )
+    ? collectedSources.filter((source) => !isVertexSearchUrl(source.url))
+    : collectedSources;
+
+  return verifySources(preferredSources.slice(0, 6));
 }
 
 async function verifySources(
@@ -556,7 +584,7 @@ async function verifyLink(source: {
       title: source.title,
       url: source.url,
       resolvedUrl: source.url,
-      status: "no_verificada",
+      status: isUmcUrl(source.url) ? "caida" : "no_verificada",
     };
   } finally {
     clearTimeout(timeout);
@@ -586,6 +614,14 @@ function isInterestingLink(url: string): boolean {
       hostname.includes("docs.google.com") ||
       hostname.includes("vertexaisearch.cloud.google.com")
     );
+  } catch {
+    return false;
+  }
+}
+
+function isVertexSearchUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase().includes("vertexaisearch.cloud.google.com");
   } catch {
     return false;
   }
