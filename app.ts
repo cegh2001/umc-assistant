@@ -1,4 +1,8 @@
-import { bootstrapChatSession, sendChatMessage } from "./aiIntegration.js";
+import {
+  bootstrapChatSession,
+  sendChatMessage,
+  type SourceReference,
+} from "./aiIntegration.js";
 import { loadKnowledgeBase } from "./knowledgeBase.js";
 import { ConsoleChat } from "./userInteraction.js";
 
@@ -40,16 +44,29 @@ async function main(): Promise<void> {
   }
 }
 
-function formatSources(
-  sources: Array<{ title: string; url: string }>
-): string {
+function formatSources(sources: SourceReference[]): string {
   const lines = ["Fuentes verificadas:"];
 
   sources.forEach((source, index) => {
-    lines.push(`${index + 1}. ${source.title} - ${source.url}`);
+    const displayUrl = source.resolvedUrl || source.url;
+    lines.push(
+      `${index + 1}. ${source.title} - ${displayUrl} [${formatSourceStatus(source)}]`
+    );
   });
 
   return lines.join("\n");
+}
+
+function formatSourceStatus(source: SourceReference): string {
+  if (source.status === "activa") {
+    return source.httpStatus ? `activa ${source.httpStatus}` : "activa";
+  }
+
+  if (source.status === "caida") {
+    return source.httpStatus ? `caida ${source.httpStatus}` : "caida";
+  }
+
+  return source.httpStatus ? `sin confirmar ${source.httpStatus}` : "sin confirmar";
 }
 
 function handleError(error: unknown): void {
