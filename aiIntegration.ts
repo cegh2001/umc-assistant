@@ -107,7 +107,7 @@ async function createResponse(
       },
     });
   } catch (error) {
-    if (isThinkingUnsupportedError(error)) {
+    if (shouldRetryWithoutThinking(model, error)) {
       return chat.sendMessage({
         message: userInput,
         config: baseConfig,
@@ -155,6 +155,14 @@ function shouldRequestThinking(modelName: string): boolean {
   return modelName.startsWith("gemma-4-") || modelName.startsWith("gemini-");
 }
 
+function shouldRetryWithoutThinking(modelName: string, error: unknown): boolean {
+  if (isThinkingUnsupportedError(error)) {
+    return true;
+  }
+
+  return modelName === "gemma-4-31b-it" && getErrorStatus(error) === 500;
+}
+
 function isThinkingUnsupportedError(error: unknown): boolean {
   const message = extractErrorMessage(error).toLowerCase();
   return message.includes("thinking budget is not supported") ||
@@ -183,6 +191,18 @@ function extractErrorMessage(error: unknown): string {
   }
 
   return "";
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  if ("status" in error && typeof (error as { status?: unknown }).status === "number") {
+    return (error as { status: number }).status;
+  }
+
+  return undefined;
 }
 
 function extractResponse(response: GenerateContentResponse): ChatResponse {

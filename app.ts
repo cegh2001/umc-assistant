@@ -26,7 +26,7 @@ async function main(): Promise<void> {
       }
 
       const response = await sendChatMessage(session, userInput);
-      console.log(`Gemini: ${response.text}`);
+      console.log(`Nautilus: ${response.text}`);
 
       if (response.sources.length > 0) {
         console.log(formatSources(response.sources));
@@ -58,13 +58,13 @@ function handleError(error: unknown): void {
   const status = getErrorStatus(error);
   if (status === 429 || status === 503 || status === 500) {
     console.log(
-      "Gemini: El servicio no esta disponible temporalmente. Intenta nuevamente en unos minutos."
+      "Nautilus: El servicio no esta disponible temporalmente. Intenta nuevamente en unos minutos."
     );
     return;
   }
 
   console.log(
-    "Gemini: Ocurrio un error al procesar tu solicitud. Intenta nuevamente con otra pregunta."
+    "Nautilus: Ocurrio un error al procesar tu solicitud. Intenta nuevamente con otra pregunta."
   );
 }
 
