@@ -655,33 +655,43 @@ function isGenericUmcUrl(url: string): boolean {
 
 async function getCampusMapPart(): Promise<Part | null> {
   cachedCampusMapPartPromise ??= downloadCampusMapPart();
-  return cachedCampusMapPartPromise;
+
+  try {
+    return await cachedCampusMapPartPromise;
+  } catch {
+    cachedCampusMapPartPromise = Promise.resolve(null);
+    return null;
+  }
 }
 
 async function downloadCampusMapPart(): Promise<Part | null> {
-  const fileId = extractGoogleDriveFileId(CAMPUS_MAP_DRIVE_URL);
+  try {
+    const fileId = extractGoogleDriveFileId(CAMPUS_MAP_DRIVE_URL);
 
-  if (!fileId) {
+    if (!fileId) {
+      return null;
+    }
+
+    const response = await fetch(
+      `https://drive.google.com/uc?export=download&id=${fileId}`,
+      { redirect: "follow" }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
+
+    if (!mimeType || !mimeType.startsWith("image/")) {
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return createPartFromBase64(buffer.toString("base64"), mimeType);
+  } catch {
     return null;
   }
-
-  const response = await fetch(
-    `https://drive.google.com/uc?export=download&id=${fileId}`,
-    { redirect: "follow" }
-  );
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
-
-  if (!mimeType || !mimeType.startsWith("image/")) {
-    return null;
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return createPartFromBase64(buffer.toString("base64"), mimeType);
 }
 
 function extractGoogleDriveFileId(url: string): string | null {
