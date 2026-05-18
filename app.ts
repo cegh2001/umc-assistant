@@ -13,6 +13,10 @@ async function main(): Promise<void> {
     while (true) {
       const userInput = await consoleChat.ask("Tú: ");
 
+      if (userInput === null) {
+        break;
+      }
+
       if (!userInput) {
         continue;
       }
@@ -22,7 +26,11 @@ async function main(): Promise<void> {
       }
 
       const response = await sendChatMessage(session, userInput);
-      console.log(`Gemini: ${response}`);
+      console.log(`Gemini: ${response.text}`);
+
+      if (response.sources.length > 0) {
+        console.log(formatSources(response.sources));
+      }
     }
   } catch (error) {
     handleError(error);
@@ -30,6 +38,18 @@ async function main(): Promise<void> {
   } finally {
     consoleChat.close();
   }
+}
+
+function formatSources(
+  sources: Array<{ title: string; url: string }>
+): string {
+  const lines = ["Fuentes verificadas:"];
+
+  sources.forEach((source, index) => {
+    lines.push(`${index + 1}. ${source.title} - ${source.url}`);
+  });
+
+  return lines.join("\n");
 }
 
 function handleError(error: unknown): void {

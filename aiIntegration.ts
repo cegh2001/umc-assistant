@@ -1,8 +1,23 @@
-import { GoogleGenAI } from "@google/genai";
+import {
+  GoogleGenAI,
+  ThinkingLevel,
+  type Chat,
+  type GenerateContentResponse,
+} from "@google/genai";
 import "dotenv/config";
 
 export interface ChatSession {
-  lastInteractionId: string;
+  chat: Chat;
+}
+
+export interface SourceReference {
+  title: string;
+  url: string;
+}
+
+export interface ChatResponse {
+  text: string;
+  sources: SourceReference[];
 }
 
 const apiKey = process.env.GEMINI_API_KEY ?? process.env.API_KEY;
@@ -17,7 +32,7 @@ const model = process.env.GEMINI_MODEL ?? "gemma-4-26b-a4b-it";
 const ai = new GoogleGenAI({ apiKey });
 
 const ASSISTANT_BOOTSTRAP = `
-Eres un asistente virtual especializado en la Universidad Nacional Experimental Maritima del Caribe (UMC).
+Eres un asistente virtual especializado en la Universidad Nacional Experimental Maritima del Caribe (UMC) llamado Nautilus.
 
 Reglas de trabajo:
 - Usa la base de conocimiento local como fuente principal.
@@ -35,35 +50,75 @@ Cuando termines de procesarla responde solo con ACK.
 export async function bootstrapChatSession(
   knowledgeBase: string
 ): Promise<ChatSession> {
-  const interaction = await ai.interactions.create({
+  const chat = ai.chats.create({
     model,
-    input: `${ASSISTANT_BOOTSTRAP}\n\nBASE LOCAL UMC:\n\n${knowledgeBase}`,
+    history: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `${ASSISTANT_BOOTSTRAP}\n\nBASE LOCAL UMC:\n\n${knowledgeBase}`,
+          },
+        ],
+      },
+      {
+        role: "model",
+        parts: [{ text: "ACK" }],
+      },
+    ],
   });
 
   return {
-    lastInteractionId: interaction.id,
+    chat,
   };
 }
 
 export async function sendChatMessage(
   session: ChatSession,
   userInput: string
-): Promise<string> {
-  const interaction = await ai.interactions.create({
-    model,
-    input: userInput,
-    previous_interaction_id: session.lastInteractionId,
-    tools: [{ type: "google_search" }],
-    generation_config: {
-      thinking_level: selectThinkingLevel(userInput),
-    },
-  });
-
-  session.lastInteractionId = interaction.id;
-  return extractInteractionText(interaction);
+): Promise<ChatResponse> {
+  const response = await createResponse(session.chat, userInput);
+  return extractResponse(response);
 }
 
-function selectThinkingLevel(userInput: string): "low" | "high" {
+async function createResponse(
+  chat: Chat,
+  userInput: string
+) : Promise<GenerateContentResponse> {
+  const baseConfig = {
+    tools: [{ googleSearch: {} }],
+  };
+
+  if (!shouldRequestThinking(model)) {
+    return chat.sendMessage({
+      message: userInput,
+      config: baseConfig,
+    });
+  }
+
+  try {
+    return await chat.sendMessage({
+      message: userInput,
+      config: {
+        ...baseConfig,
+        thinkingConfig: {
+          thinkingLevel: selectThinkingLevel(userInput),
+        },
+      },
+    });
+  } catch (error) {
+    if (isThinkingUnsupportedError(error)) {
+      return chat.sendMessage({
+        message: userInput,
+        config: baseConfig,
+      });
+    }
+
+    throw error;
+  }
+}
+
+function selectThinkingLevel(userInput: string): ThinkingLevel.HIGH | ThinkingLevel.LOW {
   const normalizedInput = userInput.toLowerCase();
   const highThinkingPatterns = [
     "actual",
@@ -92,35 +147,139 @@ function selectThinkingLevel(userInput: string): "low" | "high" {
   ];
 
   return highThinkingPatterns.some((pattern) => normalizedInput.includes(pattern))
-    ? "high"
-    : "low";
+    ? ThinkingLevel.HIGH
+    : ThinkingLevel.LOW;
 }
 
-function extractInteractionText(interaction: unknown): string {
-  if (!interaction || typeof interaction !== "object") {
-    throw new Error("La respuesta del modelo llego en un formato inesperado.");
+function shouldRequestThinking(modelName: string): boolean {
+  return modelName.startsWith("gemma-4-") || modelName.startsWith("gemini-");
+}
+
+function isThinkingUnsupportedError(error: unknown): boolean {
+  const message = extractErrorMessage(error).toLowerCase();
+  return message.includes("thinking budget is not supported") ||
+    message.includes("thinking level is not supported");
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
   }
 
-  const outputs = "outputs" in interaction ? (interaction as { outputs?: unknown }).outputs : undefined;
+  if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
 
-  if (Array.isArray(outputs)) {
-    const textBlocks = outputs
-      .filter(
-        (output): output is { type: string; text: string } =>
-          typeof output === "object" &&
-          output !== null &&
-          "type" in output &&
-          "text" in output &&
-          (output as { type?: unknown }).type === "text" &&
-          typeof (output as { text?: unknown }).text === "string"
-      )
-      .map((output) => output.text.trim())
-      .filter(Boolean);
+  const nestedError = (error as {
+    error?: { error?: { message?: unknown }; message?: unknown };
+  }).error;
 
-    if (textBlocks.length > 0) {
-      return textBlocks.join("\n\n");
-    }
+  if (nestedError?.error?.message && typeof nestedError.error.message === "string") {
+    return nestedError.error.message;
+  }
+
+  if (nestedError?.message && typeof nestedError.message === "string") {
+    return nestedError.message;
+  }
+
+  return "";
+}
+
+function extractResponse(response: GenerateContentResponse): ChatResponse {
+  const text = response.text?.trim();
+
+  if (text) {
+    return {
+      text,
+      sources: extractSources(response),
+    };
   }
 
   throw new Error("El modelo no devolvio texto util para mostrar.");
+}
+
+function extractSources(response: GenerateContentResponse): SourceReference[] {
+  const sources = new Map<string, SourceReference>();
+
+  for (const candidate of response.candidates ?? []) {
+    collectCandidateCitations(candidate, sources);
+    collectGroundingMetadataSources(candidate, sources);
+  }
+
+  return Array.from(sources.values()).slice(0, 6);
+}
+
+function collectCandidateCitations(
+  candidate: unknown,
+  sources: Map<string, SourceReference>
+): void {
+  if (!candidate || typeof candidate !== "object") {
+    return;
+  }
+
+  const citationMetadata = (candidate as {
+    citationMetadata?: { citations?: unknown[] };
+  }).citationMetadata;
+
+  if (!citationMetadata || !Array.isArray(citationMetadata.citations)) {
+    return;
+  }
+
+  for (const citation of citationMetadata.citations) {
+    if (!citation || typeof citation !== "object") {
+      continue;
+    }
+
+    const url = (citation as { uri?: unknown }).uri;
+    if (typeof url !== "string" || !url) {
+      continue;
+    }
+
+    const title = (citation as { title?: unknown }).title;
+    addSource(sources, typeof title === "string" ? title : url, url);
+  }
+}
+
+function collectGroundingMetadataSources(
+  value: unknown,
+  sources: Map<string, SourceReference>
+): void {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  const groundingMetadata = (value as {
+    groundingMetadata?: { groundingChunks?: unknown[] };
+  }).groundingMetadata;
+
+  if (!groundingMetadata || !Array.isArray(groundingMetadata.groundingChunks)) {
+    return;
+  }
+
+  for (const chunk of groundingMetadata.groundingChunks) {
+    if (!chunk || typeof chunk !== "object") {
+      continue;
+    }
+
+    const web = (chunk as { web?: { title?: unknown; uri?: unknown } }).web;
+    if (!web || typeof web.uri !== "string" || !web.uri) {
+      continue;
+    }
+
+    addSource(
+      sources,
+      typeof web.title === "string" && web.title ? web.title : web.uri,
+      web.uri
+    );
+  }
+}
+
+function addSource(
+  sources: Map<string, SourceReference>,
+  title: string,
+  url: string
+): void {
+  if (!sources.has(url)) {
+    sources.set(url, { title, url });
+  }
 }
